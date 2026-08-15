@@ -35,7 +35,6 @@ public class IntakeSubsystem extends SubsystemBase {
   private double targetAngle = IntakeConstants.kPivotStowAngle;
 
   public IntakeSubsystem() {
-    // 設置 NEO 收納臂的 1:20 齒輪比轉換 (直接轉為度數)
     SparkMaxConfig pivotConfig = new SparkMaxConfig();
     pivotConfig.encoder.positionConversionFactor(IntakeConstants.kPivotPositionFactor);
     pivotConfig.encoder.velocityConversionFactor(IntakeConstants.kPivotPositionFactor / 60.0);
@@ -46,29 +45,40 @@ public class IntakeSubsystem extends SubsystemBase {
 
   @Override
   public void periodic() {
-    // 計算收納臂所需電壓
     double currentAngle = m_pivotEncoder.getPosition();
     double pidOutput = m_pivotPID.calculate(currentAngle, targetAngle);
     double ffOutput = m_pivotFeedforward.calculate(Math.toRadians(targetAngle), m_pivotPID.getSetpoint().velocity);
     m_pivotMotor.setVoltage(pidOutput + ffOutput);
   }
 
-  // ==== 滾輪控制 (Falcon) ====
+  // ==== 滾輪控制 ====
   public void setIntakeSpeed(double speed) { m_rollerMotor.set(speed); }
   public void stopIntake() { m_rollerMotor.set(0.0); }
 
-  public Command runIntakeCommand() {
-    return this.runEnd(() -> setIntakeSpeed(IntakeConstants.kIntakeSpeed), this::stopIntake);
+  public void setTargetAngle(double angle) {
+    this.targetAngle = angle;
   }
+
+  /** 複合指令：同時控制放下 Pivot + 啟動 Intake 滾輪 */
+  public Command deployAndRunIntakeCommand() {
+    return this.runEnd(
+        () -> {
+            setTargetAngle(IntakeConstants.kPivotDeployAngle);
+            setIntakeSpeed(IntakeConstants.kIntakeSpeed);
+        },
+        () -> {
+            stopIntake();
+        }
+    );
+  }
+
+  /** 退件指令 */
   public Command runIntakereCommand() {
     return this.runEnd(() -> setIntakeSpeed(IntakeConstants.kreIntakeSpeed), this::stopIntake);
   }
 
-  // ==== 收納臂角度控制 ====
-  public Command deployCommand() {
-    return this.runOnce(() -> targetAngle = IntakeConstants.kPivotDeployAngle);
-  }
+  /** 單獨收起手臂指令 */
   public Command stowCommand() {
-    return this.runOnce(() -> targetAngle = IntakeConstants.kPivotStowAngle);
+    return this.runOnce(() -> setTargetAngle(IntakeConstants.kPivotStowAngle));
   }
 }

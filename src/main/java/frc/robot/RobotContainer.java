@@ -11,6 +11,7 @@ import frc.robot.subsystems.IndexerSubsystem;
 import frc.robot.subsystems.shooterSubsystem;
 import frc.robot.subsystems.Vision;
 import frc.robot.commands.TeleopDrive;
+import frc.robot.commands.AutoAim;
 
 public class RobotContainer {
   private final DriveSubsystem m_robotDrive = new DriveSubsystem();
@@ -25,6 +26,7 @@ public class RobotContainer {
   public RobotContainer() {
     configureButtonBindings();
 
+    // 預設底盤手動駕駛 (WASD / 搖桿)
     m_robotDrive.setDefaultCommand(
         new TeleopDrive(
                 m_robotDrive,
@@ -40,24 +42,23 @@ public class RobotContainer {
 
   private void configureButtonBindings() {
     // ==========================================
-    // 1. 進件 (展開 Pivot + 吸入滾輪 + 履帶向上)
+    // 1. 進件連動 (按住 Right Trigger)
+    // 吸球(deployAndRunIntakeCommand) 與 履帶(runConveyorCommand) 分屬不同 Subsystem，完美併行
     // ==========================================
     m_driverController.rightTrigger().whileTrue(
         Commands.parallel(
-            m_intake.deployCommand(),       
-            m_intake.runIntakeCommand(),    
-            m_indexer.runConveyorCommand()  // 僅開履帶，不開輸球馬達，避免球提早進 Shooter
+            m_intake.deployAndRunIntakeCommand(),    
+            m_indexer.runConveyorCommand()
         )
     ).onFalse(
-        Commands.parallel(
-            m_intake.stowCommand()          // 鬆開後自動收起
-        )
+        m_intake.stowCommand() // 鬆開按鈕後收起手臂
     );
 
-    m_driverController.x().whileTrue(m_intake.runIntakereCommand()); // 吐件
+    // 吐件 (按住 X 鍵)
+    m_driverController.x().whileTrue(m_intake.runIntakereCommand());
 
     // ==========================================
-    // 2. 視覺自動測距瞄準
+    // 2. 視覺自動對準與自動測距射擊 (按住 Left Trigger)
     // ==========================================
     m_driverController.leftTrigger().whileTrue(
         Commands.parallel(
@@ -67,14 +68,14 @@ public class RobotContainer {
     );
 
     // ==========================================
-    // 3. 射擊推球 (這會強制把 Indexer 履帶跟 Feeder 輸球一起啟動，把球塞進 Shooter)
+    // 3. 射擊推球 (按住 A 鍵啟動 Feeder 輸球塞入 Shooter)
     // ==========================================
     m_driverController.a().whileTrue(
-        m_indexer.feedToShooterCommand() // 當 Shooter 到達轉速時，按下 A 鍵將球射出
+        m_indexer.feedToShooterCommand()
     );
 
     // ==========================================
-    // 4. 手動射擊摩擦輪微調
+    // 4. 手動摩擦輪運轉 (Left/Right Bumper)
     // ==========================================
     m_driverController.leftBumper().whileTrue(
       m_shooter.runShooterCommand(ShooterConstants.kStandardRPM, () -> m_driverController.getRightY())  

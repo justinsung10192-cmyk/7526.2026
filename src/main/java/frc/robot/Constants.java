@@ -3,6 +3,7 @@ package frc.robot;
 import edu.wpi.first.math.util.Units;
 
 public final class Constants {
+  // 駕駛員手把設定
   public static class OIConstants {
     public static final int kDriverControllerPort = 0;
     public static final double kJoystickDeadband = 0.05;
@@ -40,7 +41,7 @@ public final class Constants {
 
     // Pivot 齒輪比轉換 (讓 Encoder 讀數變成角度)
     public static final double kPivotGearRatio = 20.0;
-    public static final double kPivotPositionFactor = 360.0 / kPivotGearRatio; // 一圈 360 度除以減速比
+    public static final double kPivotPositionFactor = 360.0 / kPivotGearRatio;
     
     public static final double kPivotKp = 0.03;
     public static final double kPivotKi = 0.0;
@@ -65,11 +66,10 @@ public final class Constants {
     public static final int kTopCanId = 21; 
     public static final int kBottomCanId = 22;
     
-    // Phoenix 6 閉迴路參數 (Slot0)
     public static final double kP = 0.11; 
     public static final double kI = 0.0;
     public static final double kD = 0.0;
-    public static final double kV = 0.12; // Feedforward (重要)
+    public static final double kV = 0.12; 
     
     public static final double kStandardRPM = 2500.0; 
     public static final double kTrimSensitivity = 500.0; 
