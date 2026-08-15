@@ -1,64 +1,79 @@
 package frc.robot.subsystems;
 
+import edu.wpi.first.math.interpolation.InterpolatingDoubleTreeMap;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import com.ctre.phoenix.motorcontrol.can.WPI_VictorSPX;
-import com.ctre.phoenix.motorcontrol.InvertType;
+
+import com.ctre.phoenix6.hardware.TalonFX;
+import com.ctre.phoenix6.signals.MotorAlignmentValue;
+import com.ctre.phoenix6.configs.TalonFXConfiguration;
+import com.ctre.phoenix6.controls.Follower;
+import com.ctre.phoenix6.controls.VelocityVoltage;
+
 import frc.robot.Constants.ShooterConstants;
 import java.util.function.DoubleSupplier;
 
 public class shooterSubsystem extends SubsystemBase {
-  private final WPI_VictorSPX m_mainMotor = new WPI_VictorSPX(ShooterConstants.kShooterCanId);
-  private final WPI_VictorSPX m_followerMotor = new WPI_VictorSPX(ShooterConstants.kShooterFollowCanId);
+  private final TalonFX m_topMotor = new TalonFX(ShooterConstants.kTopCanId);
+  private final TalonFX m_bottomMotor = new TalonFX(ShooterConstants.kBottomCanId);
+  
+  private final VelocityVoltage m_velocityReq = new VelocityVoltage(0).withSlot(0);
+  private final InterpolatingDoubleTreeMap distanceToRpmMap = new InterpolatingDoubleTreeMap();
 
   public shooterSubsystem() {
-    m_mainMotor.configFactoryDefault();
-    m_followerMotor.configFactoryDefault();
+    distanceToRpmMap.put(1.5, 2000.0); 
+    distanceToRpmMap.put(2.5, 3000.0); 
+    distanceToRpmMap.put(4.0, 4200.0); 
 
-    // 設定副馬達跟隨主馬達
-    m_followerMotor.follow(m_mainMotor);
+    TalonFXConfiguration config = new TalonFXConfiguration();
+    config.Slot0.kP = ShooterConstants.kP;
+    config.Slot0.kV = ShooterConstants.kV;
 
-    m_mainMotor.setInverted(false);
+    m_topMotor.getConfigurator().apply(config);
+    m_bottomMotor.getConfigurator().apply(config);
 
-    // 如果兩顆滾輪是「對稱夾球（上下或左右對轉）」，副馬達選 OpposeMaster (反向)
-    m_followerMotor.setInverted(InvertType.OpposeMaster);
-
-    // 如果兩顆馬達是「同軸平行帶動」，改用這行：
-    // m_followerMotor.setInverted(InvertType.FollowMaster);
+    // 💡 使用 Phoenix 6 鏈式呼叫語法，明確指定下馬達反向 (Oppose Master)
+    m_bottomMotor.setControl(new Follower(m_topMotor.getDeviceID(), MotorAlignmentValue.Opposed));
   }
 
-  public void setSpeed(double speed) {
-    speed = Math.max(-1.0, Math.min(1.0, speed));
-    m_mainMotor.set(speed); // 主馬達一動，副馬達自動同步運轉！
+  @Override
+  public void periodic() {
+    SmartDashboard.putNumber("Shooter/Current RPM", m_topMotor.getVelocity().getValueAsDouble() * 60.0);
+  }
+
+  public void setRPM(double targetRPM) {
+    double targetRPS = targetRPM / 60.0;
+    m_topMotor.setControl(m_velocityReq.withVelocity(targetRPS));
   }
 
   public void stop() {
-    m_mainMotor.set(0.0);
+    m_topMotor.set(0.0);
   }
 
-  public Command runShooterCommand(double baseSpeed, DoubleSupplier stickInputSupplier) {
+  public Command runShooterCommand(double baseRPM, DoubleSupplier stickInputSupplier) {
     return this.runEnd(
         () -> {
           double trim = -stickInputSupplier.getAsDouble() * ShooterConstants.kTrimSensitivity;
-          double finalSpeed = baseSpeed + trim;
-          setSpeed(finalSpeed);
+          setRPM(baseRPM + trim);
         },
-        () -> {
-          stop();
-        }
+        this::stop
     );
   }
 
-  public Command runShooterreCommand(double baseSpeed, DoubleSupplier stickInputSupplier) {
+  public Command autoRangingShootCommand(Vision vision) {
     return this.runEnd(
         () -> {
-          double trim = -stickInputSupplier.getAsDouble() * ShooterConstants.kTrimSensitivity;
-          double finalSpeed = baseSpeed + trim;
-          setSpeed(-finalSpeed);
+          double distance = vision.getDistanceToTarget();
+          if (distance > 0) {
+            double targetRPM = distanceToRpmMap.get(distance);
+            setRPM(targetRPM);
+            SmartDashboard.putNumber("Shooter/Auto Target RPM", targetRPM);
+          } else {
+            stop(); 
+          }
         },
-        () -> {
-          stop();
-        }
+        this::stop
     );
   }
 }
